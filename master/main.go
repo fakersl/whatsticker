@@ -104,6 +104,7 @@ func main() {
 		}
 	}()
 	http.Handle("/incoming", &incomingMessageHandler{})
+	http.Handle("/webhook", &incomingMessageHandler{})
 	http.Handle("/", http.HandlerFunc(liveness))
 	if err := http.ListenAndServe(":"+*port, nil); err != nil {
 		log.Errorf("Could not start server on %s", *port)
