@@ -8,8 +8,8 @@ x-common-variables: &common-variables
   WAIT_HOST_CONNECT_TIMEOUT: 30
   CONVERT_TO_WEBP_QUEUE: convert
   SEND_WEBP_TO_WHATSAPP_QUEUE: complete
-  LOG_METRIC_QUEUE : metric
-  LOG_LEVEL : info
+  LOG_METRIC_QUEUE: metric
+  LOG_LEVEL: info
   VERIFY_TOKEN: ${VERIFY_TOKEN}
   BEARER_ACCESS_TOKEN: ${BEARER_ACCESS_TOKEN}
 
@@ -23,14 +23,16 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - whatsticker-master
+
   whatsticker-master:
     build:
       context: "."
       dockerfile: ./master/Dockerfile
     restart: always
     depends_on:
-      - rabbitmq
-    command: bash -c "/wait && go run master/main.go -log-level DEBUG"
+      rabbitmq:
+        condition: service_healthy
+    command: bash -c "/wait --timeout=300 --host=rabbitmq:5672 && go run master/main.go -log-level DEBUG"
     volumes:
       - images:/project/images
       - videos:/project/videos
@@ -49,8 +51,9 @@ services:
     restart: always
     platform: linux/x86_64
     depends_on:
-      - rabbitmq
-    command: bash -c "/wait && go run worker/main.go"
+      rabbitmq:
+        condition: service_healthy
+    command: bash -c "/wait --timeout=300 --host=rabbitmq:5672 && go run worker/main.go"
     volumes:
       - images:/project/images
       - videos:/project/videos
@@ -59,15 +62,16 @@ services:
       replicas: 3
     environment:
       <<: *common-variables
-        
+
   whatsticker-logger:
     build:
       context: "."
       dockerfile: ./logger/Dockerfile
     restart: always
     depends_on:
-      - rabbitmq
-    command: bash -c "/wait && go run logger/main.go"
+      rabbitmq:
+        condition: service_healthy
+    command: bash -c "/wait --timeout=300 --host=rabbitmq:5672 && go run logger/main.go"
     environment:
       <<: *common-variables
     ports: 
@@ -83,19 +87,11 @@ services:
     volumes:
       - /var/lib/rabbitmq/
       - /var/log/rabbitmq/
-
-#  grafana:
-#    image: grafana/grafana
-#    ports:
-#      - 3000:3000
-
-#  prometheus:
-#    hostname: rabbitmq
-#    image: prom/prometheus
-#    volumes:
-#      - ${PWD}/utils/prometheus.yml:/etc/prometheus/prometheus.yml
-#    ports:
-#      - 9090:9090
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   images:
